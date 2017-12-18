@@ -1,0 +1,22 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "bento/ubuntu-16.04"
+  config.vm.network "private_network", ip: "192.168.33.10"
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
+    localectl set-locale LANG=ja_JP.UTF-8 LANGUAGE="ja_JP:ja"
+    source /etc/default/locale
+    timedatectl set-timezone Asia/Tokyo
+
+    debconf-set-selections <<< 'mysql-server mysql-server/root_password password password'
+    debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password password'
+    apt-get install -y mysql-server
+
+    mysql -uroot -ppassword -e 'grant all privileges on *.* to root@"%" identified by "password" with grant option;'
+    mysql -uroot -ppassword -e 'create database zipkin;'
+    mysql -uroot -ppassword zipkin < /vagrant/zipkin-mysql.sql
+    mysql -uroot -ppassword zipkin < /vagrant/app-mysql.sql
+    sed -ie 's/^bind-address/# bind-address/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+    systemctl restart mysql
+  SHELL
+end
